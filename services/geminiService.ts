@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { ImageData, Source } from '../types';
+import { ImageData, Source, GoldPriceData, GoldApiResponse } from '../types';
 
 async function getApiKey() {
     if (!process.env.API_KEY) {
@@ -91,6 +91,28 @@ export async function searchWithGoogle(prompt: string): Promise<{ text: string; 
     return { text: response.text, sources };
 }
 
+export async function generateSpeech(text: string): Promise<string> {
+    const ai = await getAiClient();
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) {
+        throw new Error("پاسخی حاوی صدا دریافت نشد.");
+    }
+    return base64Audio;
+}
+
 
 export async function animateImageWithVeo(image: ImageData, prompt: string, aspectRatio: '16:9' | '9:16'): Promise<string> {
     // VEO requires creating a new client right before the call
@@ -133,4 +155,25 @@ export async function animateImageWithVeo(image: ImageData, prompt: string, aspe
     const response = await fetch(`${downloadLink}&key=${apiKey}`);
     const videoBlob = await response.blob();
     return URL.createObjectURL(videoBlob);
+}
+
+export async function fetchGoldPrices(): Promise<GoldPriceData> {
+    const response = await fetch('https://api.tgju.online/v1/price/main');
+    if (!response.ok) {
+        throw new Error('خطا در دریافت اطلاعات قیمت طلا.');
+    }
+    const data: GoldApiResponse = await response.json();
+    
+    const sekehEmamiPrice = data.price_info['sekeh-emami']?.p;
+    const mesghalPrice = data.price_info['mesghal']?.p;
+
+    if (!sekehEmamiPrice || !mesghalPrice) {
+        throw new Error('داده‌های قیمت ناقص است.');
+    }
+
+    return {
+        sekehEmami: parseInt(sekehEmamiPrice.replace(/,/g, ''), 10),
+        mesghal: parseInt(mesghalPrice.replace(/,/g, ''), 10),
+        lastUpdate: new Date(data.time).toLocaleTimeString('fa-IR'),
+    };
 }

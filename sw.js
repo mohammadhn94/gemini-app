@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemini-suite-v1';
+const CACHE_NAME = 'gemini-suite-v3';
 const urlsToCache = [
   '/',
   '/index.html',
